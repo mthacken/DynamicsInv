@@ -12,23 +12,35 @@ foreach ($file in $csFiles) {
     $classDefPattern = '^\s*(public|internal|private|protected)?\sclass\s+(\w+)\s:\s*[^\{]*\bIPlugin\b'
     $classDefLine = $null
     $classfound = $false
-    $resolvePattern = 'resolve\s*\(\s*(\w+)'
+    $resolvePattern = 'Resolve<'
+    $excludePattern = 'ICrmContext'
     $resolveLine = $null
     $resolvefound = $false
+    $servicenaam = $null
+    $entitynaam = $null
+    $actionplugin = $false
 
     foreach ($line in $content) {
         if (!$classfound) { 
             if ($line -match $classDefPattern) {
                 $classDefLine = $line
                 $classfound = $true
-                break
+                if ($line -match '<(.*?)>') {
+                    $entitynaam = $matches[1]
+                }
+                if ($line -match 'ActionPluginEventHandler') {
+                    $actionplugin = $true
+                }
             }
         }
         else {
             if (!$resolvefound) {
                 if ($line -match $resolvePattern) {
-                    if (-not $resolveFound) {
+                    if (!($line -match $excludepattern)) {
                         $resolveLine = $line
+                        if ($line -match '<(.*?)>') {
+                            $servicenaam = $matches[1]
+                        }
                         $resolveFound = $true
                     }
                 }
@@ -37,12 +49,21 @@ foreach ($file in $csFiles) {
     }
 
     if ($classDefLine) {
-        Write-Output "Class definitie:"
-        Write-Output $classDefLine
+        Write-output $file.FullName
+        Write-Output "Class definitie:$classDefLine"
+        if ($actionplugin) {
+            Write-Output "action plugin - req,res = $entitynaam"
+        } 
+        else {
+            Write-Output "entity plugin - entity = $entitynaam"
+        }
         if ($resolveLine) {
-            Write-Output "`nService aanroep:"
-            Write-Output $resolveLine
-            Write-Output "`n"
+            if ($servicenaam) {
+                Write-Output "Sevice: $servicenaam"
+            }
+            else {
+                Write-Output "Service aanroep: $resolveLine `n"
+            }
         }
     }
 }
