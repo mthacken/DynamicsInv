@@ -1,6 +1,6 @@
 $csFiles = Get-ChildItem -Path 'C:\beheer\vibe\toezicht2' -Filter *.cs -Recurse
 
-$overview = @()
+$pluginResults = @()
 
 foreach ($file in $csFiles) {
 
@@ -23,7 +23,7 @@ foreach ($file in $csFiles) {
     foreach ($line in $content) {
         if (!$classfound) { 
             if ($line -match $classDefPattern) {
-                $classDefLine = $line
+                $classDefLine = $line.TrimStart()
                 $classfound = $true
                 if ($line -match '<(.*?)>') {
                     $entitynaam = $matches[1]
@@ -37,7 +37,7 @@ foreach ($file in $csFiles) {
             if (!$resolvefound) {
                 if ($line -match $resolvePattern) {
                     if (!($line -match $excludepattern)) {
-                        $resolveLine = $line
+                        $resolveLine = $line.TrimStart()
                         if ($line -match '<(.*?)>') {
                             $servicenaam = $matches[1]
                         }
@@ -47,23 +47,42 @@ foreach ($file in $csFiles) {
             }
         }
     }
-
+    if ($file.FullName -match "[Cc][Bb][Mm]") {
+        $onderdeel = "CBM"
+    }
+    elseif ($file.FullName -match "Insolventie") {
+        $onderdeel = "Insolventie"
+    }
+    elseif ($file.FullName -match "[Ll][Kk][Bb]") {   
+        $onderdeel = "LKB"
+    }
+    else {
+        $onderdeel = "Common"
+    }
     if ($classDefLine) {
-        Write-output $file.FullName
-        Write-Output "Class definitie:$classDefLine"
         if ($actionplugin) {
-            Write-Output "action plugin - req,res = $entitynaam"
+            $soortplugin = "action"
+            $entitynaam = $entitynaam.Split(',')[0]
         } 
         else {
-            Write-Output "entity plugin - entity = $entitynaam"
+            $soortplugin = "entity"
         }
-        if ($resolveLine) {
-            if ($servicenaam) {
-                Write-Output "Sevice: $servicenaam"
-            }
-            else {
-                Write-Output "Service aanroep: $resolveLine `n"
-            }
+
+        $pluginResults += [PSCustomObject]@{
+            "onderdeel"    = $onderdeel
+            "soort plugin" = $soortPlugin
+             "entityrequest" = $entitynaam
+            "naam"         = $file.Name.split('.')[0]
+            "service" = $servicenaam
+            "classdefinitie" = $classDefLine
+            "serviceaanroep" = $resolveline
+            "filenaam" = $file.FullName
         }
     }
 }
+
+# Exporteer de verzamelde plugin-data naar een CSV-bestand.
+$exportPath = "plugins_output.csv"
+$pluginResults | Export-Csv -Path $exportPath -NoTypeInformation -Encoding UTF8
+
+Write-Output "Export completed to $exportPath"
