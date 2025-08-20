@@ -1,7 +1,11 @@
+$outputFile = "output/entities_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmmss")
+$relationsFile = "output/entityrelations_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmmss")
+
 $csFiles = Get-ChildItem -Path 'C:\beheer\vibe\toezicht2\crmfiles\components\entities' -Filter entity.xml -Recurse #| Select-Object -First 100
 
 
-$EntityResults = @()
+$entityResults = @()
+$relationResults = @()
 
 foreach ($file in $csFiles) {
     $entityName = $null
@@ -26,23 +30,39 @@ foreach ($file in $csFiles) {
     # Haal de namen van lookup-attributen op uit de <attributes> sectie; filter op Type gelijk aan "lookup"
     $lookupAttributeNames = @()
     foreach ($attribute in $xml.Entity.EntityInfo.entity.attributes.attribute) {
-        if ($attribute.Type -eq "lookup") {
-            $lookupAttributeNames += $attribute.Name
-        }
         if ($attribute.Type -eq "primarykey") {
             $primaryid = $attribute.Name
+        }
+    }
+    foreach ($attribute in $xml.Entity.EntityInfo.entity.attributes.attribute) {
+        if ($attribute.Type -eq "lookup") {
+            $lookupAttributeNames += $attribute.Name
+            if (($attribute.Name.EndsWith("id")) -and ($primaryId)) {
+                $relationResults += [PSCustomObject]@{
+                    PrimaryId   = $primaryid
+                    SecundaryId = $attribute.Name
+                }
+            }
         }
     }
 
     # Toon de geëxtraheerde variabelen
     if ($primaryId) {
-        Write-Host "EntityName: $EntityName"
-        Write-Host "OriginalName: $OriginalName"
-        Write-Host "LocalizedName: $localizedName"
-        Write-Host "PrimaryId: $primaryid"
-        Write-Host "LocalizedCollectionName: $localizedCollectionName"
-        Write-Host "Description: $description"
-        Write-Host "Lookup Attributes: $($lookupAttributeNames -join ', ')"
+        $entityResults += [PSCustomObject]@{
+            EntityName              = $entityName
+            OriginalName            = $originalName
+            LocalizedName           = $LocalizedName
+            PrimaryId               = $primaryid
+            LocalizedCollectionName = $LocalizedCollectionName
+            Description             = $description
+            LookupAttributes        = $lookupAttributeNames -join ', '
+        }
+
     } 
 }
 
+# Exporteer de verzamelde entity-data naar een CSV-bestand.
+$entityResults | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+$relationResults | Export-Csv -Path $relationsFile -NoTypeInformation -Encoding UTF8
+
+Write-Output "Export completed to $outputFile en $relationsFile"

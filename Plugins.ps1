@@ -1,3 +1,6 @@
+$outputFile = "output/plugins_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmmss")
+if (Test-Path $outputFile) { Remove-Item $outputFile }
+
 $csFiles = Get-ChildItem -Path 'C:\beheer\vibe\toezicht2' -Filter *.cs -Recurse
 
 $pluginResults = @()
@@ -82,7 +85,6 @@ foreach ($file in $csFiles) {
 }
 
 # Exporteer de verzamelde plugin-data naar een CSV-bestand.
-$exportPath = "plugins_output.csv"
-$pluginResults | Export-Csv -Path $exportPath -NoTypeInformation -Encoding UTF8
+$pluginResults | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
 
-Write-Output "Export completed to $exportPath"
+Write-Output "Export completed to $outputFile"
