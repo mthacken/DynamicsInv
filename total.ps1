@@ -165,6 +165,7 @@ function get-EntityOverview {
     $LocalizedCollectionName = $null
     $description = $null
     $primaryId = $null
+    $relationResults = @()
 
     # Laad het XML-bestand in
     [xml]$xml = Get-Content $file.PSPath
@@ -187,42 +188,48 @@ function get-EntityOverview {
         if ($attribute.Type -eq "lookup") {
             if (($attribute.Name.EndsWith("id")) -and ($primaryId)) {
                 $lookupAttributeNames += $attribute.Name
-                $relationResult = [PSCustomObject]@{
+                $relationResults += [PSCustomObject]@{
                     PrimaryId       = $primaryid
                     PrimaryEntity   = $entityName
-                    SecundaryId     = $attribute.Name
-                    SecundaryEntity = $null
+                    SecondaryId     = $attribute.Name
+                    SecondaryEntity = $null
                 }
-                $relationResults += $relationResult
             }
         }
     }
-    $entityName = $entityName -replace '^(spi_|_spir_)', ''
+    # $entityName = $entityName -replace '^(spi_|_spir_)', ''
+    $entityplugin = @()
     $entityplugin = $entityPlugins | Where-Object { $_.'entityrequest' -eq $entityName }
     if ($entityPlugin) {
-        $entityplugin.ConnectedEntity = $entityName
-        $entityplugin.ConnectedOn = "EntityName"
+        foreach ($plugin in $entityplugin) {
+            $plugin.ConnectedEntity = $entityName
+            $plugin.ConnectedOn = "EntityName"
+        }
     }
     else {
         $entityplugin = $entityPlugins | Where-Object { $_.'entityrequest' -eq $LocalizedName }
         if ($entityplugin) {
-            $entityplugin.ConnectedEntity = $LocalizedName
-            $entityplugin.ConnectedOn = "LocalizedName"
+            foreach ($plugin in $entityplugin) {
+                $plugin.ConnectedEntity = $LocalizedName
+                $plugin.ConnectedOn = "LocalizedName"
+            }
         }
     }
 
     # Toon de geëxtraheerde variabelen
-    if ($primaryId) {
+    if ($null -ne $primaryId) {
         $entityResult = [PSCustomObject]@{
             EntityName              = $entityName
             OriginalName            = $originalName
             LocalizedName           = $LocalizedName
             PrimaryId               = $primaryid
-            LocalizedCollectionName = $LocalizedCollectionName      
-            plugin                  = $entityPlugin.naam
-            service                 = $entityplugin.service
-            pluginonderdeel         = $entityplugin.onderdeel
-            Description             = $description   
+            LocalizedCollectionName = $LocalizedCollectionName 
+            aantalPlugins           = $Entityplugin.Count
+            plugin                  = $entityPlugin[0].naam
+            service                 = $entityplugin[0].service
+            pluginonderdeel         = $entityplugin[0].onderdeel
+            Description             = $description 
+            Relations               = $relationResults
             LookupAttributes        = $lookupAttributeNames -join ', '
         }
         return $entityResult
@@ -230,10 +237,17 @@ function get-EntityOverview {
     return $null
 }
 function set-SecondaryEntity { 
+    param(
+        [object]$Relation
+    )
     
-    foreach ($relation in $relationResults) {
-        $Entity = $entityResults | Where-Object { $_.EntityName -eq $relation.SecundaryId } | first 1 
-        $relation.SecundaryEntity = $Entity.EntityName
+    $Entity = $entityResults | Where-Object { $_.PrimaryId -eq $relation.SecondaryId } | Select-Object -First 1 
+    if ($Entity) {
+        $Relation.SecondaryEntity = $Entity.EntityName
+        return [PSCustomObject]@{ Success = $true; Result = $Relation }
+    }
+    else {
+        return [PSCustomObject]@{ Success = $false; Error = "EntityId Not Found!" }
     }
 }
 
@@ -251,14 +265,15 @@ else {
 $servicerepo = "$repo\rechtspraak.toezicht\"
 $entityrepo = "$repo\crmfiles\components\entities"
 
-
 $pluginResults = @()
 $entityResults = @()
 $serviceResults = @()
 $serviceRows = @()
-$relationResults = @()
+$relationResultTotals = @()
+$entityNotFound = @()
 
 # zoek eerst alle plugins
+Write-Progress -Activity "Opstarten......"
 $csFiles = Get-ChildItem -Path $repo -Filter *.cs -Recurse
 $i = 1 
 foreach ($file in $csFiles) {
@@ -266,7 +281,7 @@ foreach ($file in $csFiles) {
     if ($null -ne $pluginResult) {
         $pluginResults += $pluginResult
     }
-    Write-Progress -Activity "zoeken naar plugins" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete (($i++) / $csFiles.Count * 100)
+    Write-Progress -Activity "zoeken naar plugins" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
 }
 
 
@@ -280,7 +295,7 @@ foreach ($file in $csFiles) {
         $serviceResults += $serviceResult
         $serviceRows += $serviceResult.rows
     }
-    Write-Progress -Activity "zoeken naar services" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete (($i++) / $csFiles.Count * 100)
+    Write-Progress -Activity "zoeken naar services" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
 }
 
 # Selecteer alleen de objecten waar 'soort plugin' gelijk is aan 'entity'. Deze worden gebruikt om plugins en entities aan elkaar te koppelen.
@@ -293,12 +308,26 @@ foreach ($file in $csFiles) {
     $entityResult = get-EntityOverview -file $file
     if ($entityResult) {
         $entityResults += $entityResult
+        $relationResultTotals += $entityResult.Relations
     }
-    Write-Progress -Activity "zoeken naar entities" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete (($i++) / $csFiles.Count * 100)
+    Write-Progress -Activity "zoeken naar entities" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
 }
 
 # vul de secondaryEntities aan in de relaties
-set-SecondaryEntity
+$i = 1
+foreach ($relation in $relationResultTotals) {
+    $result = set-SecondaryEntity -Relation $relation
+    if (!$result.success) {
+        write-host "$($relation.SecondaryId) Niet gevonden"
+        if ($relation.SecondaryId -notin ($entityNotFound | Select-Object -ExpandProperty SecondaryId)) {
+            $entityNotFound += , $Relation
+        }
+        else {
+            write-host "$($relation.SecondaryId) al in de not found lijst"
+        }
+    }
+    Write-Progress -Activity "completeer relations" -Status "($i / $($relationResultTotals.Count))" -PercentComplete ((($i++) / $relationResultTotals.Count) * 100)
+}
 
 # exporteer de 5 csv files
 
@@ -308,6 +337,7 @@ $serviceFile = Resolve-fileName  -fileName "services"
 $serviceRowsFile = Resolve-fileName -fileName "services_methods"
 $entityFile = Resolve-fileName -fileName "entities"
 $relationsFile = Resolve-fileName -fileName "entityrelations"
+$EntityNotFoundFile = Resolve-fileName -fileName "entity_not_found"
 
 # Exporteer de verzamelde plugin-data naar een CSV-bestand.
 $pluginResults | Export-Csv -Path $pluginFile -NoTypeInformation -Encoding UTF8
@@ -320,5 +350,6 @@ Write-Output "Export completed to $serviceFile and $serviceRowsFile"
 
 # Exporteer de verzamelde entity-data naar een CSV-bestand.
 $entityResults | Export-Csv -Path $entityFile -NoTypeInformation -Encoding UTF8
-$relationResults | Export-Csv -Path $relationsFile -NoTypeInformation -Encoding UTF8
+$relationResultTotals | Export-Csv -Path $relationsFile -NoTypeInformation -Encoding UTF8
+$entityNotFound | Export-Csv -Path $EntityNotFoundFile -NoTypeInformation -Encoding UTF8
 Write-Output "Export completed to $entityFile en $relationsFile"

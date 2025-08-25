@@ -40,7 +40,7 @@ foreach ($file in $csFiles) {
             if (($attribute.Name.EndsWith("id")) -and ($primaryId)) {
                 $relationResults += [PSCustomObject]@{
                     PrimaryId   = $primaryid
-                    SecundaryId = $attribute.Name
+                    SecondaryId = $attribute.Name
                 }
             }
         }
