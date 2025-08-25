@@ -2,7 +2,7 @@
 
 param (
     [string]$CsvPath = "c:\beheer\Vibe\DynamicsInv\output\entityrelations_20250819_181102.csv",
-    [string]$OutPath = "c:\beheer\Vibe\DynamicsInv\output\entityrelations_20250819_181102.md"
+    [string]$OutPath = "c:\beheer\Vibe\DynamicsInv\mermaid\entityrelations_20250819_181102.md"
 )
 
 $lines = Get-Content $CsvPath | Select-Object -Skip 1

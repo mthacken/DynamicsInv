@@ -4,7 +4,7 @@ function Resolve-fileName {
         [string]$fileName
     )
     for ($i = 1; $i -lt 100; $i++) {
-        $outputFile = "output/$fileName_{0}_{1}.csv" -f (Get-Date -Format "yyyyMMdd"), $i
+        $outputFile = "output/{0}_{1}_{2}.csv" -f $fileName, (Get-Date -Format "yyyyMMdd"), $i
         if (!(Test-Path $outputFile)) {
             break
         }
@@ -21,6 +21,7 @@ function Get-CSharpClassOverview {
     # Zoek de classdefinitie
     $classMatch = [regex]::Match($content, '(public|internal|private|protected)?\s*class\s+(\w*Service\w*)')
     $className = $classMatch.Groups[2].Value
+    $serviceResult = $null
 
     #alleen als de class gevonden is, ga verder
     if ($classMatch.Success) {
@@ -51,15 +52,15 @@ function Get-CSharpClassOverview {
 
         # Bouw array van objecten  
         if ($classMatch.Success) {
-            $rows += [PSCustomObject]@{ Type = "Class"; Signature = $classMatch.Value.Trim() }
+            $rows += [PSCustomObject]@{ Service = $classname; Type = "Class"; Signature = $classMatch.Value.Trim() -replace "(\r\n|\n|\r)", ""}
         }
         foreach ($ctor in $constructors) {
-            $rows += [PSCustomObject]@{ Type = "Constructor"; Signature = $ctor }
+            $rows += [PSCustomObject]@{ Service = $classname; Type = "Constructor"; Signature = $ctor -replace "(\r\n|\n|\r)", "" }
         }
         foreach ($method in $methods) {
-            $rows += [PSCustomObject]@{ Type = "Method"; Signature = $method }
+            $rows += [PSCustomObject]@{ Service = $classname; Type = "Method"; Signature = $method -replace "(\r\n|\n|\r)", "" }
         }
-        $serviceResults = [PSCustomObject]@{
+        $serviceResult = [PSCustomObject]@{
             "onderdeel" = $onderdeel
             "naam"      = $file.Name.split('.')[0]
             "service"   = $className
@@ -68,51 +69,29 @@ function Get-CSharpClassOverview {
         }
         
     }
-    return $serviceResults
+    return $serviceResult
 }
 
 # main script
 
 $outputFile = Resolve-fileName ("services")
+$outputRowsFile = Resolve-fileName ("services_rows")
 $csFiles = Get-ChildItem -Path 'C:\beheer\vibe\toezicht2\rechtspraak.toezicht\' -Filter *.cs -Recurse
 
 $serviceResults = @()
+$serviceRows = @()
 
-foreach ($file in $csFiles) {
-
+foreach ($file in $csFiles) 
+{
     # Lees alle regels uit het bestand.
-    $rows = Get-CSharpClassOverview -file $File
-
-
-    # Zoek naar de eerste regel die een class-definitie bevat.
-    # Dit matcht optioneel de toegangsspecificatie (public/private/etc.) en de keyword 'class' gevolgd door de class-naam.
-    $classDefPattern = 'public\s+class\s+\w*Service\w*\b'
-
-    $classDefLine = $null
-    $classfound = $false
-
-    foreach ($line in $content) {
-        if (!$classfound) { 
-            if ($line -match $classDefPattern) {
-                # write-host "ja $line"
-                $classDefLine = $line.TrimStart()
-                $classfound = $true
-            }
-        }
-    }
-
-    if ($classDefLine) {
-        $serviceResults += [PSCustomObject]@{
-            "onderdeel"      = $onderdeel
-            "naam"           = $file.Name.split('.')[0]
-            "service"        = $servicenaam
-            "classdefinitie" = $classDefLine
-            "serviceaanroep" = $resolveline
-            "filenaam"       = $file.FullName
-        }
+    $serviceResult = Get-CSharpClassOverview -file $File
+    if ($serviceResult) {
+        $serviceResults += $serviceResult
+        $serviceRows += $serviceResult.rows
     }
 }
 
 # Exporteer de verzamelde services-data naar een CSV-bestand.
 $serviceResults | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+$serviceRows | Export-Csv -Path $outputRowsFile -NoTypeInformation -Encoding UTF8
 Write-Output "Export completed to $outputFile"
