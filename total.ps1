@@ -1,3 +1,5 @@
+#requires -Version 7.5
+
 function Resolve-fileName {
     param(
         [string]$fileName
@@ -138,16 +140,16 @@ function Get-PluginOverview {
             $soortplugin = "entity"
         }
         $pluginResult = [PSCustomObject]@{
-            "onderdeel"      = $onderdeel
-            "soort plugin"   = $soortPlugin
-            "entityrequest"  = $entitynaam
-            "naam"           = $file.Name.split('.')[0]
-            "service"        = $servicenaam
-            "classdefinitie" = $classDefLine
-            "serviceaanroep" = $resolveline
-            "filenaam"       = $file.FullName
-            "ConnectedEntity"= $null
-            "ConnectedOn"    = $null
+            "onderdeel"       = $onderdeel
+            "soort plugin"    = $soortPlugin
+            "entityrequest"   = $entitynaam
+            "naam"            = $file.Name.split('.')[0]
+            "service"         = $servicenaam
+            "classdefinitie"  = $classDefLine
+            "serviceaanroep"  = $resolveline
+            "filenaam"        = $file.FullName
+            "ConnectedEntity" = $null
+            "ConnectedOn"     = $null
         }
         return $pluginResult
     }
@@ -185,10 +187,13 @@ function get-EntityOverview {
         if ($attribute.Type -eq "lookup") {
             if (($attribute.Name.EndsWith("id")) -and ($primaryId)) {
                 $lookupAttributeNames += $attribute.Name
-                $relationResults += [PSCustomObject]@{
-                    PrimaryId   = $primaryid
-                    SecundaryId = $attribute.Name
+                $relationResult = [PSCustomObject]@{
+                    PrimaryId       = $primaryid
+                    PrimaryEntity   = $entityName
+                    SecundaryId     = $attribute.Name
+                    SecundaryEntity = $null
                 }
+                $relationResults += $relationResult
             }
         }
     }
@@ -202,7 +207,7 @@ function get-EntityOverview {
         $entityplugin = $entityPlugins | Where-Object { $_.'entityrequest' -eq $LocalizedName }
         if ($entityplugin) {
             $entityplugin.ConnectedEntity = $LocalizedName
-            $entityplugin.ConnectedOn =  "LocalizedName"
+            $entityplugin.ConnectedOn = "LocalizedName"
         }
     }
 
@@ -223,6 +228,13 @@ function get-EntityOverview {
         return $entityResult
     } 
     return $null
+}
+function set-SecondaryEntity { 
+    
+    foreach ($relation in $relationResults) {
+        $Entity = $entityResults | Where-Object { $_.EntityName -eq $relation.SecundaryId } | first 1 
+        $relation.SecundaryEntity = $Entity.EntityName
+    }
 }
 
 # main script
@@ -284,6 +296,9 @@ foreach ($file in $csFiles) {
     }
     Write-Progress -Activity "zoeken naar entities" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete (($i++) / $csFiles.Count * 100)
 }
+
+# vul de secondaryEntities aan in de relaties
+set-SecondaryEntity
 
 # exporteer de 5 csv files
 
