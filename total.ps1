@@ -43,18 +43,18 @@ function Get-CSharpClassOverview {
             if ($constructors -notcontains $method) { $method }
         }
 
-        if ($file.FullName -match "[Cc][Bb][Mm]") {
-            $onderdeel = "CBM"
-        }
-        elseif ($file.FullName -match "Insolventie") {
-            $onderdeel = "Insolventie"
-        }
-        elseif ($file.FullName -match "[Ll][Kk][Bb]") {   
-            $onderdeel = "LKB"
+        # services zijn ingedeeld in folders met de structuur: <onderdeel>\<functie>
+        $filerelative = $file.FullName -replace [regex]::Escape($servicerepo), ''
+        $parts = $filerelative -split '\\'
+        if ($parts.count -ge 2) {
+            $onderdeelService = $parts[0]
+            if ($parts.count -eq 3) {
+                $functieService = $parts[1]
+            }
         }
         else {
-            $onderdeel = "Common"
-        }
+            throw "Invalid file structure $filerelative"
+        }      
 
         # Bouw array van objecten  
         if ($classMatch.Success) {
@@ -67,10 +67,11 @@ function Get-CSharpClassOverview {
             $rows += [PSCustomObject]@{ Service = $classname; Type = "Method"; Signature = $method -replace "(\r\n|\n|\r)", "" }
         }
         $serviceResult = [PSCustomObject]@{
-            "onderdeel" = $onderdeel
+            "onderdeel" = $onderdeelService
+            "functie"   = $functieService
             "naam"      = $file.Name.split('.')[0]
             "service"   = $className
-            "filenaam"  = $file.FullName
+            "filenaam"  = $filerelative
             "rows"      = $rows
         }
         
@@ -125,18 +126,8 @@ function Get-PluginOverview {
             }
         }
     }
-    if ($file.FullName -match "[Cc][Bb][Mm]") {
-        $onderdeel = "CBM"
-    }
-    elseif ($file.FullName -match "Insolventie") {
-        $onderdeel = "Insolventie"
-    }
-    elseif ($file.FullName -match "[Ll][Kk][Bb]") {   
-        $onderdeel = "LKB"
-    }
-    else {
-        $onderdeel = "Common"
-    }
+
+
     if ($classDefLine) {
         if ($actionplugin) {
             $soortplugin = "action"
@@ -145,15 +136,30 @@ function Get-PluginOverview {
         else {
             $soortplugin = "entity"
         }
+
+        # plugins zijn ingedeeld in folders met de structuur: <onderdeel>\<functie>
+        $filerelative = $file.FullName -replace [regex]::Escape($pluginrepo), ''
+        $parts = $filerelative -split '\\'
+        if ($parts.count -ge 2) {
+            $onderdeelPlugin = $parts[0]
+            if ($parts.count -eq 3) {
+                $functiePlugin = $parts[1]
+            }
+        }
+        else {
+            throw "Invalid file structure $filerelative"
+        }
+
         $pluginResult = [PSCustomObject]@{
-            "onderdeel"              = $onderdeel
+            "onderdeel"              = $onderdeelPlugin
+            "functie"                = $functiePlugin
             "soort plugin"           = $soortPlugin
             "entityrequest"          = $entitynaam
             "naam"                   = $file.Name.split('.')[0]
             "service"                = $servicenaam
             "classdefinitie"         = $classDefLine
             "serviceaanroep"         = $resolveline
-            "filenaam"               = $file.FullName
+            "filenaam"               = $filerelative
             "ConnectedLocalizedName" = $null
             "ConnectedEntityName"    = $null
             "ConnectedOn"            = $null
@@ -220,6 +226,7 @@ function get-EntityOverview {
         }
         else {
             $entityOnderdeel = $entityplugin[0].onderdeel
+            $entityFunctie = $entityplugin[0].functie
         }
     }
 
@@ -233,6 +240,7 @@ function get-EntityOverview {
                     PrimaryId                = $primaryid
                     PrimaryEntity            = $entityName
                     PrimaryEntityOnderdeel   = $EntityOnderdeel
+                    PrimaryEntityFunctie     = $entityFunctie
                     SecondaryId              = $attribute.Name
                     SecondaryIdLogical       = $attribute.LogicalName
                     SecondaryRequired        = $attribute.RequiredLevel
@@ -241,6 +249,7 @@ function get-EntityOverview {
                     SecondaryDescription     = $attribute.descriptions.description.description
                     SecondaryEntity          = $null
                     SecondaryEntityOnderdeel = $null
+                    SecondaryEntityFunctie   = $null
                 }
             }
         }
@@ -252,15 +261,18 @@ function get-EntityOverview {
             OriginalName            = $originalName
             LocalizedName           = $LocalizedName
             EntityOnderdeel         = $EntityOnderdeel
+            PrimaryEntityFunctie    = $entityFunctie
             PrimaryId               = $primaryid
             LocalizedCollectionName = $LocalizedCollectionName 
             aantalPlugins           = $Entityplugin.Count
             plugin                  = if ($entityplugin -and $entityplugin.Count -gt 0) { $entityplugin[0].naam } else { $null }
             service                 = if ($entityplugin -and $entityplugin.Count -gt 0) { $entityplugin[0].service } else { $null }
             pluginonderdeel         = if ($entityplugin -and $entityplugin.Count -gt 0) { $entityplugin[0].onderdeel } else { $null }
+            pluginFunctie           = if ($entityplugin -and $entityplugin.Count -gt 0) { $entityplugin[0].functie } else { $null }
             plugin2                 = if ($entityplugin -and $entityplugin.Count -gt 1) { $entityplugin[1].naam } else { $null }
             service2                = if ($entityplugin -and $entityplugin.Count -gt 1) { $entityplugin[1].service } else { $null }
             pluginonderdeel2        = if ($entityplugin -and $entityplugin.Count -gt 1) { $entityplugin[1].onderdeel } else { $null }
+            pluginFunctie2          = if ($entityplugin -and $entityplugin.Count -gt 1) { $entityplugin[1].functie } else { $null }
             Description             = $description 
             Relations               = $relationResults
             LookupAttributes        = $lookupAttributeNames -join ', '
@@ -274,10 +286,11 @@ function set-SecondaryEntity {
         [object]$Relation
     )
     
-    $Entity = $entityResults | Where-Object { $_.PrimaryId -eq $relation.SecondaryId } | Select-Object -First 1 
+    $Entity = $entityResults | Where-Object { ($_.PrimaryId -replace ' ', '' -replace '^(spi_|_spir_)', '') -eq ($relation.SecondaryId -replace ' ', '' -replace '^(spi_|_spir_)', '') } | Select-Object -First 1 
     if ($Entity) {
         $Relation.SecondaryEntity = $Entity.EntityName
         $Relation.SecondaryEntityOnderdeel = $Entity.EntityOnderdeel
+        $Relation.SecondaryEntityFunctie = $Entity.EntityFunctie
         return [PSCustomObject]@{ Success = $true; Result = $Relation }
     }
     else {
@@ -285,7 +298,9 @@ function set-SecondaryEntity {
     }
 }
 
+############################################################################################################################################################
 # main script
+############################################################################################################################################################
 
 # algemene variabelen
 if (Test-Path "P:\") {
@@ -298,6 +313,7 @@ else {
 }
 $servicerepo = "$repo\rechtspraak.toezicht\"
 $entityrepo = "$repo\crmfiles\components\entities"
+$pluginrepo = "$repo\rechtspraak.toezicht.processing\"
 
 $pluginResults = @()
 $entityResults = @()
@@ -308,7 +324,7 @@ $entityNotFound = @()
 
 # zoek eerst alle plugins
 Write-Progress -Activity "Opstarten......"
-$csFiles = Get-ChildItem -Path $repo -Filter *.cs -Recurse
+$csFiles = Get-ChildItem -Path $pluginrepo -Filter *.cs -Recurse
 $i = 1 
 foreach ($file in $csFiles) {
     $pluginResult = Get-PluginOverview -File $file 
