@@ -52,8 +52,32 @@ foreach ($file in $csFiles) {
     Write-Progress -Activity "zoeken naar services" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
 }
 
+$namespaces = @()
+foreach ($serviceResult in $serviceResults) {
+    $namespace = $namespaces | where-Object { $_.name -eq $serviceResult.namespace }
+    if ($namespace) {
+        foreach ($using in $serviceResult.usings) {
+            $usingfound = $namespace.usings | where-Object { $_ -eq $using }
+            if ($null -eq $usingfound) {   
+                $namespace.usings += $using
+            }
+        }
+    }
+    else {
+        $namespace = [PSCustomObject]@{
+            Name   = $serviceResult.namespace
+            usings = @()
+        }
+        foreach ($using in $serviceResult.usings) {
+            $namespace.usings += $using
+        }
+        $namespaces += $namespace
+    }
+}
+write-output $namespaces
+
 # Selecteer alleen de objecten waar 'soort plugin' gelijk is aan 'entity'. Deze worden gebruikt om plugins en entities aan elkaar te koppelen.
-$entityPlugins = $pluginResults | Where-Object { $_.'soort plugin' -eq 'entity' }
+# $entityPlugins = $pluginResults | Where-Object { $_.'soort plugin' -eq 'entity' }
 
 # zoek alle entities
 $csFiles = Get-ChildItem -Path $entityrepo -Filter entity.xml -Recurse
@@ -88,6 +112,7 @@ $serviceRowsFile = Resolve-fileName -fileName "services_methods"
 $entityFile = Resolve-fileName -fileName "entities"
 $relationsFile = Resolve-fileName -fileName "entityrelations"
 $EntityNotFoundFile = Resolve-fileName -fileName "entity_not_found"
+$NameSpaceFile = Resolve-filename -FileName "Namespacerelations"
 
 # Exporteer de verzamelde plugin-data naar een CSV-bestand.
 $pluginResults | Export-Csv -Path $pluginFile -NoTypeInformation -Encoding UTF8

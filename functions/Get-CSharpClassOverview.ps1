@@ -9,9 +9,18 @@ function Get-CSharpClassOverview {
     $className = $classMatch.Groups[2].Value
     $serviceResult = $null
 
+    # Zoek alle using statements
+    $usings = [regex]::Matches($content, 'using\s+[\w\.]+;') | ForEach-Object {
+         $usingValue = ($_.Value -replace 'using','' -replace ';','').Trim() 
+         if ($usingValue -like 'rechtspraak.toezicht*') { $usingValue }
+    }
+
+    # Zoek de namespace
+    $namespaceMatch = [regex]::Match($content, 'namespace\s+([\w\.]+)')
+    $namespace = $namespaceMatch.Groups[1].Value
+
     #alleen als de class gevonden is, ga verder
     if ($classMatch.Success) {
-        
         # Zoek de constructor(en)
         $constructorPattern = "(public|internal|private|protected)?\s*$className\s*\([^\)]*\)"
         $constructors = [regex]::Matches($content, $constructorPattern) | ForEach-Object { $_.Value.Trim() }
@@ -46,15 +55,19 @@ function Get-CSharpClassOverview {
         foreach ($method in $methods) {
             $rows += [PSCustomObject]@{ Service = $classname; Type = "Method"; Signature = $method -replace "(\r\n|\n|\r)", "" }
         }
+        foreach ($using in $usings) {
+            $rows += [PSCustomObject]@{ Service = $classname; Type = "Using"; Signature = $using -replace "(\r\n|\n|\r)", "" }
+        }
         $serviceResult = [PSCustomObject]@{
             "onderdeel" = $onderdeelService
             "functie"   = $functieService
             "naam"      = $file.Name.split('.')[0]
             "service"   = $className
             "filenaam"  = $filerelative
+            "namespace" = $namespace
+            "usings"    = $usings
             "rows"      = $rows
         }
-        
     }
     return $serviceResult
 }
