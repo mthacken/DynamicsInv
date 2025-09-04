@@ -1,7 +1,16 @@
-. "$PSScriptRoot\Functions\Resolve-fileName.ps1"
-. "$PSScriptRoot\Functions\Get-CSharpClassOverview.ps1"
-. "$PSScriptRoot\Functions\Get-PluginOverview.ps1"
-. "$PSScriptRoot\Functions\Get-EntityOverview.ps1"
-. "$PSScriptRoot\Functions\Set-SecondaryEntity.ps1"
+#Get public and private function definition files to load
+$Public = @( Get-ChildItem -Path $PSScriptRoot\Functions\*.ps1 -ErrorAction SilentlyContinue)
+$Private = @( Get-ChildItem -Path $PSScriptRoot\Private\*.ps1 -ErrorAction SilentlyContinue)
 
-Export-ModuleMember -Function Resolve-fileName, Get-CSharpClassOverview, Get-PluginOverview, Get-EntityOverview, Set-SecondaryEntity
+#Dot source the files
+Foreach ($import in @($Public + $Private)) {
+    Try {
+        . $import.fullname
+    }
+    Catch {
+        Write-Error -Message "Failed to import function $($import.fullname): $_"
+    }
+}
+
+# Export only the Public functions ($Public.BaseName) for the (WIP) modules 
+Export-ModuleMember -Function $Public.BaseName

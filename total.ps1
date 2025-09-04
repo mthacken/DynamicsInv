@@ -15,7 +15,7 @@ else {
     $repo = 'C:\beheer\vibe\toezicht2'
     #    $analyserepo = 'C:\beheer\vibe\dynamicsinv'
 }
-$servicerepo = "$repo\rechtspraak.toezicht\"
+$servicerepo = "$repo"
 $entityrepo = "$repo\crmfiles\components\entities"
 $pluginrepo = "$repo\rechtspraak.toezicht.processing\"
 
@@ -25,21 +25,11 @@ $serviceResults = @()
 $serviceRows = @()
 $relationResultTotals = @()
 $entityNotFound = @()
+$script:namespaces = @()
+$NameSpaceRelations = @()
 
-# zoek eerst alle plugins
-Write-Progress -Activity "Opstarten......"
-$csFiles = Get-ChildItem -Path $pluginrepo -Filter *.cs -Recurse
-$i = 1 
-foreach ($file in $csFiles) {
-    $pluginResult = Get-PluginOverview -File $file 
-    if ($null -ne $pluginResult) {
-        $pluginResults += $pluginResult
-    }
-    Write-Progress -Activity "zoeken naar plugins" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
-}
-
-
-# vervolgens alle services en service rows (alle methods)
+# zoek alle C# files de services (alle classes) en service rows (alle constructors, methods, namespaces en usings)
+Write-Progress -Activity "Opstarten C# file scan ......"
 $i = 1
 $csFiles = Get-ChildItem -Path "$servicerepo" -Filter *.cs -Recurse
 foreach ($file in $csFiles) {
@@ -49,32 +39,46 @@ foreach ($file in $csFiles) {
         $serviceResults += $serviceResult
         $serviceRows += $serviceResult.rows
     }
-    Write-Progress -Activity "zoeken naar services" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
+    Write-Progress -Activity "zoeken door de C# files" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
 }
 
-$namespaces = @()
-foreach ($serviceResult in $serviceResults) {
-    $namespace = $namespaces | where-Object { $_.name -eq $serviceResult.namespace }
-    if ($namespace) {
-        foreach ($using in $serviceResult.usings) {
-            $usingfound = $namespace.usings | where-Object { $_ -eq $using }
-            if ($null -eq $usingfound) {   
-                $namespace.usings += $using
-            }
-        }
+# zoek dan alle plugins
+Write-Progress -Activity "Opstarten Plugins....."
+$csFiles = Get-ChildItem -Path $pluginrepo -Filter *.cs -Recurse
+$i = 1 
+foreach ($file in $csFiles) {
+    $pluginResult = Get-PluginOverview -File $file 
+    if ($null -ne $pluginResult) {
+        $pluginResults += $pluginResult
     }
-    else {
-        $namespace = [PSCustomObject]@{
-            Name   = $serviceResult.namespace
-            usings = @()
-        }
-        foreach ($using in $serviceResult.usings) {
-            $namespace.usings += $using
-        }
-        $namespaces += $namespace
-    }
+    Write-Progress -Activity "zoeken door de plugins" -Status "($i / $($csFiles.Count)) $($file.Name)" -PercentComplete ((($i++) / $csFiles.Count) * 100)
 }
-write-output $namespaces
+
+# uit de namespaces die in de C# files gevonden zijn, maak een overzicht van alle usings per namespace
+$i = 1
+foreach ($serviceResult in $serviceResults) {
+    Update-NamespaceRelations -serviceResult $serviceResult -namespaces ([ref]$namespaces)
+    Write-Progress -Activity "update namespace relations" -Status "($i / $($serviceResults.Count))" -PercentComplete ((($i++) / $serviceResults.Count) * 100)
+}
+
+# stop de namespace relaties in een array van objecten
+$i = 1
+foreach ($namespace in $namespaces) {
+    foreach ($using in $namespace.usings) {        
+        $targetnamespace = $namespaces | where-Object { $_.name -eq $using.name }
+        $rows = [PSCustomObject]@{
+            Namespace       = $namespace.Name
+            Soort           = $namespace.Soort
+            Using           = $using.name
+            FileNamen       = $using.FileNamen -join '; '
+            TargetSoort     = if ($targetnamespace) { $targetnamespace.Soort } else { "Niet gevonden" }
+            TargetNamespace = if ($targetnamespace) { $targetnamespace.Name } else { "Niet gevonden" }
+            Soortmatch      = if ($namespace.Soort -eq $targetnamespace.Soort) { $true } else { $false }
+        }
+        $NameSpaceRelations += $rows
+    }
+    Write-Progress -Activity "save namespace relaties" -Status "($i / $($namespaces.Count))" -PercentComplete ((($i++) / $namespaces.Count) * 100)
+}
 
 # Selecteer alleen de objecten waar 'soort plugin' gelijk is aan 'entity'. Deze worden gebruikt om plugins en entities aan elkaar te koppelen.
 # $entityPlugins = $pluginResults | Where-Object { $_.'soort plugin' -eq 'entity' }
@@ -103,9 +107,9 @@ foreach ($relation in $relationResultTotals) {
     Write-Progress -Activity "completeer relations" -Status "($i / $($relationResultTotals.Count))" -PercentComplete ((($i++) / $relationResultTotals.Count) * 100)
 }
 
-# exporteer de 5 csv files
-
+# exporteer de verzamelde object arrays in 7 csv files
 if (!(Test-Path -Path "output")) { New-Item -ItemType Directory -Path "output" | Out-Null }
+
 $pluginFile = Resolve-fileName -fileName "plugins"
 $serviceFile = Resolve-fileName  -fileName "services"
 $serviceRowsFile = Resolve-fileName -fileName "services_methods"
@@ -127,4 +131,5 @@ Write-Output "Export completed to $serviceFile and $serviceRowsFile"
 $entityResults | Export-Csv -Path $entityFile -NoTypeInformation -Encoding UTF8
 $relationResultTotals | Export-Csv -Path $relationsFile -NoTypeInformation -Encoding UTF8
 $entityNotFound | Export-Csv -Path $EntityNotFoundFile -NoTypeInformation -Encoding UTF8
-Write-Output "Export completed to $entityFile en $relationsFile"
+$NameSpaceRelations | Export-Csv -Path $NameSpaceFile -NoTypeInformation -Encoding UTF8
+Write-Output "Export completed to $entityFile, $relationsFile, $EntityNotFoundFile and $NameSpaceFile"

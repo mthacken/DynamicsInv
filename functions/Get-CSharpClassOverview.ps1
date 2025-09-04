@@ -3,16 +3,20 @@ function Get-CSharpClassOverview {
         [object]$File
     )
     $content = Get-Content $File.PSPath -Raw
+     if ([string]::IsNullOrWhiteSpace($content)) {
+        return $null
+    }
     $rows = @()
-    # Zoek de classdefinitie
-    $classMatch = [regex]::Match($content, '(public|internal|private|protected)?\s*class\s+(\w*Service\w*)')
+    # Zoek de classdefinitie 
+    $classMatch = [regex]::Match($content, '(public|internal|private|protected)?\s*class\s+(\w+)') # Alle CS files
+    # $classMatch = [regex]::Match($content, '(public|internal|private|protected)?\s*class\s+(\w*Service\w*)') # Alleen Services
     $className = $classMatch.Groups[2].Value
     $serviceResult = $null
 
     # Zoek alle using statements
     $usings = [regex]::Matches($content, 'using\s+[\w\.]+;') | ForEach-Object {
-         $usingValue = ($_.Value -replace 'using','' -replace ';','').Trim() 
-         if ($usingValue -like 'rechtspraak.toezicht*') { $usingValue }
+        $usingValue = ($_.Value -replace 'using', '' -replace ';', '').Trim() 
+        if ($usingValue -like 'rechtspraak.toezicht*') { $usingValue }
     }
 
     # Zoek de namespace
@@ -58,10 +62,24 @@ function Get-CSharpClassOverview {
         foreach ($using in $usings) {
             $rows += [PSCustomObject]@{ Service = $classname; Type = "Using"; Signature = $using -replace "(\r\n|\n|\r)", "" }
         }
+        $naam = $file.Name.split('.')[0]
+        switch -Regex ($naam) {
+            'Service' { $soort = 'Service'; break }
+            'Validator' { $soort = 'Validator'; break }
+            'Provider' { $soort = 'Provider'; break }
+            'Sjabloon' { $soort = 'Sjabloon'; break }
+            'Factory' { $soort = 'Factory'; break }
+            'Vragen' { $soort = 'Vragen'; break }
+            'Plugin' { $soort = 'Plugin'; break }
+
+            default { $soort = 'Andere' }
+        }
+
         $serviceResult = [PSCustomObject]@{
             "onderdeel" = $onderdeelService
             "functie"   = $functieService
-            "naam"      = $file.Name.split('.')[0]
+            "naam"      = $naam
+            "soort"     = $soort
             "service"   = $className
             "filenaam"  = $filerelative
             "namespace" = $namespace
