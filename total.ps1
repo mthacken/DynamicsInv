@@ -107,6 +107,9 @@ foreach ($relation in $relationResultTotals) {
     Write-Progress -Activity "completeer relations" -Status "($i / $($relationResultTotals.Count))" -PercentComplete ((($i++) / $relationResultTotals.Count) * 100)
 }
 
+# maak een overzicht van projects en solutions
+$solutionResults = Get-ProjectOverview -repoRoot $repo
+
 # exporteer de verzamelde object arrays in 7 csv files
 if (!(Test-Path -Path "output")) { New-Item -ItemType Directory -Path "output" | Out-Null }
 
@@ -117,6 +120,7 @@ $entityFile = Resolve-fileName -fileName "entities"
 $relationsFile = Resolve-fileName -fileName "entityrelations"
 $EntityNotFoundFile = Resolve-fileName -fileName "entity_not_found"
 $NameSpaceFile = Resolve-filename -FileName "Namespacerelations"
+$solutionsFile = Resolve-fileName -fileName "solutions"
 
 # Exporteer de verzamelde plugin-data naar een CSV-bestand.
 $pluginResults | Export-Csv -Path $pluginFile -NoTypeInformation -Encoding UTF8
@@ -132,4 +136,6 @@ $entityResults | Export-Csv -Path $entityFile -NoTypeInformation -Encoding UTF8
 $relationResultTotals | Export-Csv -Path $relationsFile -NoTypeInformation -Encoding UTF8
 $entityNotFound | Export-Csv -Path $EntityNotFoundFile -NoTypeInformation -Encoding UTF8
 $NameSpaceRelations | Export-Csv -Path $NameSpaceFile -NoTypeInformation -Encoding UTF8
+$solutionResults | Export-Csv -Path $solutionsFile -NoTypeInformation -Encoding UTF8
+
 Write-Output "Export completed to $entityFile, $relationsFile, $EntityNotFoundFile and $NameSpaceFile"
