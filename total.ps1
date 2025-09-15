@@ -8,16 +8,18 @@ Import-Module "$PSScriptRoot\DynamicsInv.psm1" -force
 
 # algemene variabelen
 if (Test-Path "P:\") {
-    $repo = 'P:\Repos\toezicht'
+    $repoRoot = 'P:\Repos\toezicht'
+    $outputPath = 'L:\OntwikkelShare\Projecten\Toezicht\Architectuur'
     #    $analyserepo = 'P:\Repos\analyse'
 }
 else {
-    $repo = 'C:\beheer\vibe\toezicht2'
+    $repoRoot = 'C:\beheer\vibe\toezicht2'
+    $outputPath = 'output'
     #    $analyserepo = 'C:\beheer\vibe\dynamicsinv'
 }
-$servicerepo = "$repo"
-$entityrepo = "$repo\crmfiles\components\entities"
-$pluginrepo = "$repo\rechtspraak.toezicht.processing\"
+$servicerepo = "$repoRoot"
+$entityrepo = "$repoRoot\crmfiles\components\entities"
+$pluginrepo = "$repoRoot\rechtspraak.toezicht.processing\"
 
 $pluginResults = @()
 $entityResults = @()
@@ -108,19 +110,19 @@ foreach ($relation in $relationResultTotals) {
 }
 
 # maak een overzicht van projects en solutions
-$solutionResults = Get-ProjectOverview -repoRoot $repo
+$solutionResults = Get-ProjectOverview -repoRoot $repoRoot
 
 # exporteer de verzamelde object arrays in 7 csv files
 if (!(Test-Path -Path "output")) { New-Item -ItemType Directory -Path "output" | Out-Null }
 
-$pluginFile = Resolve-fileName -fileName "plugins"
-$serviceFile = Resolve-fileName  -fileName "services"
-$serviceRowsFile = Resolve-fileName -fileName "services_methods"
-$entityFile = Resolve-fileName -fileName "entities"
-$relationsFile = Resolve-fileName -fileName "entityrelations"
-$EntityNotFoundFile = Resolve-fileName -fileName "entity_not_found"
-$NameSpaceFile = Resolve-filename -FileName "Namespacerelations"
-$solutionsFile = Resolve-fileName -fileName "solutions"
+$pluginFile = Resolve-fileName -fileName "plugins" -date $false -outputPath $outputPath
+$serviceFile = Resolve-fileName  -fileName "services" -date $false -outputPath $outputPath
+$serviceRowsFile = Resolve-fileName -fileName "services_methods" -date $false -outputPath $outputPath
+$entityFile = Resolve-fileName -fileName "entities" -date $false -outputPath $outputPath
+$relationsFile = Resolve-fileName -fileName "entityrelations" -date $false -outputPath $outputPath
+$EntityNotFoundFile = Resolve-fileName -fileName "entity_not_found" -date $false -outputPath $outputPath
+$NameSpaceFile = Resolve-filename -FileName "Namespacerelations" -date $false -outputPath $outputPath
+$solutionsFile = Resolve-fileName -fileName "solutions" -date $false -outputPath $outputPath
 
 # Exporteer de verzamelde plugin-data naar een CSV-bestand.
 $pluginResults | Export-Csv -Path $pluginFile -NoTypeInformation -Encoding UTF8

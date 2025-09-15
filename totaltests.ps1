@@ -35,7 +35,7 @@ function Get-KeywordsFromPath {
         }
     }
     $cbmkeys = @('s2s', 'bewind')
-    $inskeys = @('curatoren','wsnp')
+    $inskeys = @('curatoren', 'wsnp')
     foreach ($cbmkey in $cbmkeys) {
         if ($found -contains $cbmkey) {
             if ($found -notcontains 'cbm') {
@@ -65,7 +65,9 @@ function Get-KeywordsFromPath {
     return $ordered
 }
 
-
+############################################################################################################################################################
+# main script
+############################################################################################################################################################
 
 # Zet het pad naar de root van je repo
 if (Test-Path "P:\") {
@@ -78,7 +80,8 @@ else {
     $outputPath = 'output'
     #    $analyserepo = 'C:\beheer\vibe\dynamicsinv'
 }
-$TestOverviewFile = Resolve-fileName -fileName "TestOverview" -outputPath $outputPath
+
+$TestOverviewFile = Resolve-fileName -fileName "TestOverview" -outputPath $outputPath -date $false
 
 $results = @()
 
